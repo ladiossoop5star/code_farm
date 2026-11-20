@@ -1,0 +1,6 @@
+Host dev-server
+    HostName dev.example.com
+    User developer
+    IdentityFile ~/.ssh/id_ed25519
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
