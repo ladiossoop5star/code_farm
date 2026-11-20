@@ -1,0 +1,3 @@
+[ui]
+mouse_capture = true
+prompt_new_tab_name = true
