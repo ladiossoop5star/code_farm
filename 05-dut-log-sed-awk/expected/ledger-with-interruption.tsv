@@ -1,0 +1,7 @@
+before	NO_DEVICE	raw/before/01.log
+before	NO_DEVICE	raw/before/02.log
+before	NO_DEVICE	raw/before/03.log
+after	PASS	raw/after/01.log
+after	NO_EVENT	raw/after/02.log
+after	PASS	raw/after/03.log
+after	NO_RESULT	raw/after/04.log

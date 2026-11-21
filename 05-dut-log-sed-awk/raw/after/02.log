@@ -1,0 +1,7 @@
+KERNEL 6.17.0-1014-nvidia
+DT compatible=gpio-keys
+DT status=okay
+BOUND ../../../bus/platform/drivers/gpio-keys
+DUT READY: waiting for KEY_POWER
+DUT SELFTEST FAIL: KEY_POWER event missing
+[    6.134738] reboot: Power down

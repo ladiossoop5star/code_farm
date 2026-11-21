@@ -1,0 +1,6 @@
+before	raw/before/01.log
+before	raw/before/02.log
+before	raw/before/03.log
+after	raw/after/01.log
+after	raw/after/02.log
+after	raw/after/03.log

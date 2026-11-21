@@ -1,0 +1,5 @@
+KERNEL 6.17.0-1014-nvidia
+DT compatible=gpio-keys
+DT status=disabled
+DUT SELFTEST FAIL: gpio-keys input device missing
+[    1.115769] reboot: Power down
