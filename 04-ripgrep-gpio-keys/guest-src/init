@@ -1,0 +1,27 @@
+#!/bin/busybox sh
+set -eu
+B=/bin/busybox
+$B mount -t proc proc /proc
+$B mount -t sysfs sysfs /sys
+$B mount -t devtmpfs devtmpfs /dev
+$B insmod /gpio_keys.ko
+printf 'KERNEL %s\n' "$($B uname -r)"
+printf 'DT compatible='
+$B tr -d '\000' </sys/firmware/devicetree/base/gpio-keys/compatible
+printf '\nDT status='
+$B tr -d '\000' </sys/firmware/devicetree/base/gpio-keys/status
+printf '\n'
+event=
+for candidate in /sys/class/input/event*; do
+    if [ -r "$candidate/device/name" ] && [ "$($B cat "$candidate/device/name")" = gpio-keys ]; then
+        event=/dev/input/${candidate##*/}
+        break
+    fi
+done
+if [ -z "$event" ]; then
+    echo 'DUT SELFTEST FAIL: gpio-keys input device missing'
+else
+    printf 'BOUND %s\n' "$($B readlink /sys/bus/platform/devices/gpio-keys/driver)"
+    /check-key "$event" || true
+fi
+$B poweroff -f

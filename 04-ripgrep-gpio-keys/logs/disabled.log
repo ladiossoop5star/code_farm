@@ -1,0 +1,2 @@
+KERNEL 6.17.0-1014-nvidia
+DUT SELFTEST FAIL: gpio-keys input device missing

@@ -1,0 +1,10 @@
+/.deps/
+/.vim/pack/workbench/start/*/doc/tags
+.bookmark
+.viminfo
+*.swp
+/demo-driver/build/
+/demo-driver/cscope.out
+/demo-driver/cscope.in.out
+/demo-driver/cscope.po.out
+/demo-driver/tags
