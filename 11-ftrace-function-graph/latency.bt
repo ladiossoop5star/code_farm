@@ -1,0 +1,22 @@
+kprobe:observe_measure
+{
+    @started[tid] = nsecs;
+    @profile[tid] = arg0;
+}
+
+kretprobe:observe_measure
+/@started[tid]/
+{
+    $profile = @profile[tid];
+    $us = (nsecs - @started[tid]) / 1000;
+    @samples[$profile] = count();
+    @latency_us[$profile] = hist($us);
+    delete(@started[tid]);
+    delete(@profile[tid]);
+}
+
+END
+{
+    clear(@started);
+    clear(@profile);
+}

@@ -1,0 +1,67 @@
+#!/bin/bash
+set -euo pipefail
+
+fixture=$(cd -- "$(dirname -- "$0")" && pwd)
+default_mode=ftrace
+mode=${1:-$default_mode}
+kernel=${OBS_KERNEL:?Set OBS_KERNEL to a readable AArch64 kernel image}
+headers=${OBS_HEADERS:-/lib/modules/$(uname -r)/build}
+config=${OBS_CONFIG:-/boot/config-$(uname -r)}
+qemu=${OBS_QEMU:-qemu-system-aarch64}
+qemu_data=${OBS_QEMU_DATA:-}
+qemu_libraries=${OBS_QEMU_LIBS:-${LD_LIBRARY_PATH:-}}
+busybox=${OBS_BUSYBOX:-$(command -v busybox || true)}
+cc=${OBS_CC:-aarch64-linux-gnu-gcc}
+
+case "$mode" in
+    dyndbg|ftrace|bpftrace|all|shell) ;;
+    *) echo "usage: bash run-guest [dyndbg|ftrace|bpftrace|all|shell]" >&2; exit 2 ;;
+esac
+command -v "$qemu" >/dev/null || { echo "QEMU executable not found: $qemu" >&2; exit 1; }
+for input in "$kernel" "$headers/Makefile" "$config" "$busybox"; do
+    test -r "$input" || { echo "Missing prerequisite: $input" >&2; exit 1; }
+done
+scratch=$(mktemp -d)
+trap 'rm -rf -- "$scratch"' EXIT
+mkdir -p "$scratch/module" "$scratch/root"/{bin,sbin,usr/bin,dev,proc,sys,tmp,lab}
+cp "$fixture/Makefile" "$fixture/observe_lab.c" "$scratch/module/"
+make -s -C "$headers" M="$scratch/module" CC="$cc" \
+    KCFLAGS="-ffile-prefix-map=$scratch/module=lab" modules >&2
+root="$scratch/root"
+cp "$busybox" "$root/bin/busybox"
+for applet in sh mount poweroff dmesg insmod cat grep wc gzip awk mkdir rmdir uname; do
+    ln -s busybox "$root/bin/$applet"
+done
+cp "$fixture/init" "$root/init"
+chmod +x "$root/init"
+cp "$fixture"/{checks,workload,latency.bt} "$scratch/module/observe_lab.ko" "$root/lab/"
+cp "$config" "$root/lab/kernel.config"
+
+if [[ "$mode" = all || "$mode" = bpftrace || ( "$mode" = shell && "$default_mode" = bpftrace ) ]]; then
+    bpftrace=$(command -v bpftrace)
+    cp "$bpftrace" "$root/usr/bin/"
+    ldd "$bpftrace" > "$scratch/libraries"
+    if grep -q 'not found' "$scratch/libraries"; then
+        cat "$scratch/libraries" >&2
+        exit 1
+    fi
+    while IFS= read -r library; do
+        install -D -m 755 "$library" "$root$library"
+    done < <(awk '{ for (i=1; i<=NF; i++) if ($i ~ /^\//) print $i }' "$scratch/libraries")
+fi
+(cd "$root" && find . -print0 | cpio --null -o -H newc --quiet | gzip -1 > "$scratch/guest.cpio.gz")
+cp "$kernel" "$scratch/kernel.img"
+kernel_version=$(awk -F'"' '/UTS_RELEASE/ {print $2}' "$headers/include/generated/utsrelease.h")
+sha256sum "$scratch/kernel.img" | awk -v version="$kernel_version" '{print "OBS kernel " version " sha256=" $1}'
+runner=(env "LD_LIBRARY_PATH=$qemu_libraries" "$qemu")
+if [[ -n "$qemu_data" ]]; then runner+=(-L "$qemu_data"); fi
+runner+=(-machine virt,acpi=off -cpu cortex-a57 -m 1024 -smp 2
+    -nodefaults -nic none -display none -serial stdio -monitor none
+    -kernel "$scratch/kernel.img" -initrd "$scratch/guest.cpio.gz"
+    -append "console=ttyAMA0 rdinit=/init quiet obs.mode=$mode")
+if [[ "$mode" = shell ]]; then
+    "${runner[@]}"
+else
+    timeout 160 "${runner[@]}" | tr -d '\r' | tee "$scratch/serial.log"
+    grep -qx 'OBS LAB PASSED' "$scratch/serial.log"
+fi

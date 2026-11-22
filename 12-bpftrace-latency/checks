@@ -1,0 +1,106 @@
+#!/bin/sh
+set -eu
+control=/proc/dynamic_debug/control
+run=/sys/module/observe_lab/parameters/run
+tracing=/sys/kernel/tracing
+
+dynamic_debug() {
+    echo '=== DYNAMIC DEBUG ==='
+    grep '^CONFIG_DYNAMIC_DEBUG=y$' /lab/kernel.config
+    grep -F '[observe_lab]' "$control"
+    echo timeout > "$run"
+    logs=$(dmesg -c | grep 'OBS ')
+    printf '%s\n' "$logs" | grep 'OBS probe ret=-110'
+    ! printf '%s\n' "$logs" | grep -q 'OBS status READY=' || return 1
+
+    echo 'module observe_lab file observe_lab.c func observe_wait_ready +p' > "$control"
+    enabled=$(grep -F '[observe_lab]' "$control" | grep ' =p ')
+    printf '%s\n' "$enabled"
+    [ "$(printf '%s\n' "$enabled" | wc -l)" -eq 1 ]
+    printf '%s\n' "$enabled" | grep -q 'observe_wait_ready'
+    echo ready > "$run"
+    echo timeout > "$run"
+    logs=$(dmesg -c | grep 'OBS ')
+    printf '%s\n' "$logs"
+    printf '%s\n' "$logs" | grep -q 'OBS status READY=1'
+    printf '%s\n' "$logs" | grep -q 'OBS status READY=0'
+    ! printf '%s\n' "$logs" | grep -Eq 'OBS (probe begin|trigger timeout|queue armed|cleanup)' || return 1
+
+    echo 'module observe_lab file observe_lab.c func observe_wait_ready -p' > "$control"
+    grep -F '[observe_lab]' "$control" | grep 'observe_wait_ready'
+    echo timeout > "$run"
+    logs=$(dmesg -c | grep 'OBS ')
+    printf '%s\n' "$logs"
+    ! printf '%s\n' "$logs" | grep -q 'OBS status READY=' || return 1
+    echo 'VERIFY DYNAMIC DEBUG OK'
+}
+
+function_graph() {
+    echo '=== FUNCTION GRAPH ==='
+    grep -w function_graph "$tracing/available_tracers"
+    grep -F 'observe_probe' "$tracing/available_filter_functions"
+    instance="$tracing"
+    echo 0 > "$instance/tracing_on"
+    echo 128 > "$instance/buffer_size_kb"
+    echo function_graph > "$instance/current_tracer"
+    echo observe_probe > "$instance/set_graph_function"
+    echo funcgraph-retval > "$instance/trace_options"
+    echo funcgraph-retval-hex > "$instance/trace_options"
+    for sample in ready timeout; do
+        : > "$instance/trace"
+        echo 1 > "$instance/tracing_on"
+        echo "$sample" > "$run"
+        echo 0 > "$instance/tracing_on"
+        cat "$instance/trace" > "/tmp/$sample.graph"
+        echo "GRAPH $sample"
+        grep -E 'entries-in-buffer|observe_(probe|wait_ready|enable_queue|cleanup)' "/tmp/$sample.graph"
+        grep -E '^overrun:|^dropped events:' "$instance"/per_cpu/cpu*/stats
+        awk -F: '/^overrun:|^dropped events:/ { n++; if ($2 + 0 != 0) exit 1 }
+                 END { if (n == 0) exit 1 }' "$instance"/per_cpu/cpu*/stats
+    done
+    grep -q 'observe_enable_queue' /tmp/ready.graph
+    ! grep -q 'observe_cleanup' /tmp/ready.graph || return 1
+    grep -q 'observe_cleanup' /tmp/timeout.graph
+    ! grep -q 'observe_enable_queue' /tmp/timeout.graph || return 1
+    grep 'observe_probe' /tmp/timeout.graph | grep -Eq 'ffffff92|ret=-110'
+    echo nop > "$instance/current_tracer"
+    : > "$instance/set_graph_function"
+    echo 'VERIFY FUNCTION GRAPH OK'
+}
+
+histogram() {
+    echo '=== BPFTRACE ==='
+    bpftrace --version
+    bpftrace -l 'tracepoint:syscalls:sys_enter_write' | grep -x 'tracepoint:syscalls:sys_enter_write'
+    bpftrace -l 'kprobe:observe_measure' | grep -x 'kprobe:observe_measure'
+    bpftrace -c '/bin/sh /lab/workload' /lab/latency.bt > /tmp/bpftrace.out
+    cat /tmp/bpftrace.out
+    for phase in 0 1 2; do
+        grep -Fx "@samples[$phase]: 12" /tmp/bpftrace.out
+        grep -E "^@latency_us\\[$phase\\]:[[:space:]]*$" /tmp/bpftrace.out
+    done
+    awk '
+        /^@latency_us\[/ { phase = substr($0, 13, 1) + 0; in_histogram = 1; next }
+        /^\[/ && in_histogram {
+            lower = $1
+            gsub(/[\[,]/, "", lower)
+            usec = (lower + 0) * (lower ~ /K$/ ? 1024 : 1)
+            samples = $3 + 0
+            if (usec < 4096) fast[phase] += samples
+            if (usec >= 4096 && usec < 16384) middle[phase] += samples
+            if (usec >= 16384) slow[phase] += samples
+        }
+        END {
+            if (fast[0] < 8 || fast[1] < 8 || slow[1] < 1 || middle[2] < 8) exit 1
+        }
+    ' /tmp/bpftrace.out
+    echo 'VERIFY BPFTRACE OK'
+}
+
+case "$1" in
+    dyndbg) dynamic_debug ;;
+    ftrace) function_graph ;;
+    bpftrace) histogram ;;
+    all) dynamic_debug; function_graph; histogram ;;
+    *) echo "unknown lab: $1" >&2; exit 2 ;;
+esac

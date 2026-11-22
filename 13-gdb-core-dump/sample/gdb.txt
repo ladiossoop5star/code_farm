@@ -1,0 +1,13 @@
+[New LWP 1]
+Program terminated with signal SIGTRAP, Trace/breakpoint trap.
+#0  check_supply () at ./firmware.c:37
+37	        __asm__ volatile("brk #0x42");
+pc             0x40081190          0x40081190 <check_supply+32>
+sp             0x400c7fe0          0x400c7fe0
+x30            0x400811c8          1074270664
+=> 0x40081190 <check_supply+32>:	brk	#0x42
+#0  check_supply () at ./firmware.c:37
+#1  0x00000000400811c8 in controller_step () at ./firmware.c:44
+#2  0x0000000040081210 in main () at ./firmware.c:52
+$1 = {build_tag = 13, sampled_mv = 2750, threshold_mv = 3000, stage = 3}
+0x400c1000 <state>:	13	2750	3000	3

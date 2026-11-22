@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -u
+
+if [[ $# != 2 ]]; then
+    printf 'Usage: run-round pass|fail|timeout|query-error OUTPUT_DIR\n' >&2
+    exit 64
+fi
+scenario=$1
+destination=$2
+here=$(cd -- "$(dirname -- "$0")" && pwd)
+bin=$here/../bin
+case $scenario in
+    pass|fail) state=delayed; limit=5 ;;
+    timeout) state=never; limit=2 ;;
+    query-error) state=error; limit=5 ;;
+    *) printf 'Unknown scenario: %s\n' "$scenario" >&2; exit 64 ;;
+esac
+
+scratch=$(mktemp -d) || exit 1
+raw=$scratch/round.log
+probe_state=$scratch/probe
+trap '[[ ! -f $raw ]] || unlink -- "$raw"; [[ ! -f $probe_state ]] || unlink -- "$probe_state"; rmdir -- "$scratch"' EXIT
+status=0
+if "$bin/wait-ready" --every 1 --timeout "$limit" -- "$here/query-ready" "$state" "$probe_state" > "$raw" 2>&1; then
+    if [[ $scenario == fail ]]; then
+        printf 'DUT SELFTEST FAIL: KEY_POWER event missing\n' >> "$raw"
+        status=1
+    else
+        printf 'DUT SELFTEST PASS: received KEY_POWER\n' >> "$raw"
+    fi
+else
+    status=$?
+    printf 'TEST SKIPPED: readiness exit=%s\n' "$status" >> "$raw"
+fi
+
+if saved=$("$bin/snap-log" --out "$destination" "$raw"); then
+    cat -- "$saved/raw.log"
+    printf 'Saved: %s\n' "$saved"
+else
+    printf 'Could not save test results. Raw log follows.\n' >&2
+    cat -- "$raw" >&2
+    exit 1
+fi
+exit "$status"

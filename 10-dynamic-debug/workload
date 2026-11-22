@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+run=/sys/module/observe_lab/parameters/run
+for phase in baseline outlier pressure; do
+    echo "$phase" > "$run"
+done

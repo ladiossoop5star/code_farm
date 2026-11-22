@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+export PATH=/bin:/sbin:/usr/bin LC_ALL=C
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tracefs tracefs /sys/kernel/tracing
+mount -t devtmpfs devtmpfs /dev
+trap 'echo "OBS LAB FAILED"; poweroff -f' EXIT
+echo "OBS guest kernel $(uname -r)"
+insmod /lab/observe_lab.ko
+mode=all
+for argument in $(cat /proc/cmdline); do
+    case "$argument" in obs.mode=*) mode=${argument#*=} ;; esac
+done
+
+if [ "$mode" = shell ]; then
+    /bin/sh -i
+else
+    /bin/sh /lab/checks "$mode"
+    echo "OBS LAB PASSED"
+fi
+trap - EXIT
+poweroff -f

@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fixture=$(cd -- "$(dirname -- "$0")" && pwd)
+kernel=${OBS_KERNEL:?Set OBS_KERNEL to a readable AArch64 kernel image}
+headers=${OBS_HEADERS:?Set OBS_HEADERS to the matching kernel headers}
+config=${OBS_CONFIG:?Set OBS_CONFIG to the matching kernel config}
+qemu=${OBS_QEMU:-qemu-system-aarch64}
+busybox=${OBS_BUSYBOX:-$(command -v busybox)}
+cc=${OBS_CC:-aarch64-linux-gnu-gcc}
+release=$(awk -F'"' '/UTS_RELEASE/ {print $2}' "$headers/include/generated/utsrelease.h")
+test -n "$release"
+scratch=$(mktemp -d)
+trap 'rm -rf -- "$scratch"' EXIT
+root="$scratch/root"
+mkdir -p "$scratch/module" "$root"/{bin,dev,proc,sys,lab}
+cp "$fixture/log-mask/"{Makefile,log_mask.c} "$scratch/module/"
+make -s -C "$headers" M="$scratch/module" CC="$cc" \
+    KCFLAGS="-ffile-prefix-map=$scratch/module=lab" modules >&2
+cp "$scratch/module/log_mask.ko" "$root/lab/"
+cp "$busybox" "$root/bin/busybox"
+for applet in sh mount uname dmesg grep cat insmod ls readlink poweroff; do
+    ln -s busybox "$root/bin/$applet"
+done
+install -m 755 "$fixture/usb-init" "$root/init"
+cp "$config" "$root/lab/kernel.config"
+for module in hid usbhid; do
+    module_file=$(modinfo -k "$release" -F filename "$module")
+    case "$module_file" in
+        '(builtin)') ;;
+        *.zst) zstd -qdc "$module_file" > "$root/lab/$module.ko" ;;
+        *.xz) xz -dc "$module_file" > "$root/lab/$module.ko" ;;
+        *.gz) gzip -dc "$module_file" > "$root/lab/$module.ko" ;;
+        *.ko) cp "$module_file" "$root/lab/$module.ko" ;;
+        *) printf 'Missing %s for %s\n' "$module" "$release" >&2; exit 1 ;;
+    esac
+done
+(cd "$root" && find . -print0 | cpio --null -o -H newc --quiet | gzip -1) > "$scratch/guest.cpio.gz"
+
+runner=(env "LD_LIBRARY_PATH=${OBS_QEMU_LIBS:-${LD_LIBRARY_PATH:-}}" "$qemu")
+if [[ -n ${OBS_QEMU_DATA:-} ]]; then runner+=(-L "$OBS_QEMU_DATA"); fi
+"${runner[@]}" -machine virt,acpi=off -cpu cortex-a57 -m 1024 -smp 2 \
+    -nodefaults -nic none -display none -serial mon:stdio -device qemu-xhci,id=xhci \
+    -kernel "$kernel" -initrd "$scratch/guest.cpio.gz" \
+    -append 'console=ttyAMA0 rdinit=/init quiet'

@@ -1,0 +1,3 @@
+DUT READY: polling
+DUT SELFTEST FAIL: KEY_POWER event missing
+DUT SELFTEST PASS: restarted

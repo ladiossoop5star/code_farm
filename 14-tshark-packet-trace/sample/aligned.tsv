@@ -1,0 +1,4 @@
+frame	transmit	sequence	pcap_ms	kernel_ms
+1	request	42	0.000	-0.006
+2	retry	42	120.243	120.234
+3	reply	42	120.381	120.379

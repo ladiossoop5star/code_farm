@@ -1,0 +1,2 @@
+ERROR: ELF fingerprint mismatch
+0x400c7fe0:	Cannot access memory at address 0x400c7fe0

@@ -1,0 +1,33 @@
+=== BPFTRACE ===
+bpftrace v0.20.2
+tracepoint:syscalls:sys_enter_write
+kprobe:observe_measure
+Attaching 3 probes...
+
+
+@latency_us[0]: 
+[1K, 2K)              11 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+[2K, 4K)               1 |@@@@                                                |
+
+@latency_us[1]: 
+[1K, 2K)              11 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+[2K, 4K)               0 |                                                    |
+[4K, 8K)               0 |                                                    |
+[8K, 16K)              0 |                                                    |
+[16K, 32K)             1 |@@@@                                                |
+
+@latency_us[2]: 
+[4K, 8K)              12 |@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@|
+
+
+@samples[1]: 12
+@samples[0]: 12
+@samples[2]: 12
+
+@samples[0]: 12
+@latency_us[0]: 
+@samples[1]: 12
+@latency_us[1]: 
+@samples[2]: 12
+@latency_us[2]: 
+VERIFY BPFTRACE OK

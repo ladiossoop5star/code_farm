@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -eu
+
+case ${1-} in
+    delayed)
+        state=${2:?provide a state file}
+        polls=0
+        if [[ -f $state ]]; then read -r polls < "$state"; fi
+        ((polls += 1))
+        printf '%s\n' "$polls" > "$state"
+        ((polls >= 3)) ;;
+    never) exit 1 ;;
+    error) printf 'Example: query is unavailable\n' >&2; exit 7 ;;
+    hanging) sleep 30; exit 1 ;;
+    *) exit 64 ;;
+esac

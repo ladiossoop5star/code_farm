@@ -1,0 +1,10 @@
+{
+  "format": "FWLAB13",
+  "arch": "AArch64",
+  "machine": "QEMU virt",
+  "ram_base": 1074528256,
+  "ram_length": 32768,
+  "elf_sha256": "f16b54a5ee18fc134ece958a69a32431d2fcc07d3d1fac79387c5488fe4b19c5",
+  "ram_sha256": "b84487825191e783d89de89017e8af3eb9053bd3129936d2d88870df8597304f",
+  "esr_el1": "0xf2000042"
+}

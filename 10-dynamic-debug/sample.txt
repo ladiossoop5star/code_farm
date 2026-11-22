@@ -1,0 +1,16 @@
+=== DYNAMIC DEBUG ===
+CONFIG_DYNAMIC_DEBUG=y
+observe_lab.c:85 [observe_lab]set_run =_ "OBS trigger timeout=%d\n"
+observe_lab.c:35 [observe_lab]observe_probe =_ "OBS probe begin\n"
+observe_lab.c:13 [observe_lab]observe_wait_ready =_ "OBS status READY=%d\n"
+observe_lab.c:23 [observe_lab]observe_enable_queue =_ "OBS queue armed\n"
+observe_lab.c:28 [observe_lab]observe_cleanup =_ "OBS cleanup failed probe\n"
+[    2.548456] observe-lab observe-lab: OBS probe ret=-110
+observe_lab.c:13 [observe_lab]observe_wait_ready =p "OBS status READY=%d\n"
+[    2.694632] observe-lab observe-lab: OBS status READY=1
+[    2.694740] observe-lab observe-lab: OBS probe ret=0
+[    2.696327] observe-lab observe-lab: OBS status READY=0
+[    2.702253] observe-lab observe-lab: OBS probe ret=-110
+observe_lab.c:13 [observe_lab]observe_wait_ready =_ "OBS status READY=%d\n"
+[    2.817825] observe-lab observe-lab: OBS probe ret=-110
+VERIFY DYNAMIC DEBUG OK

@@ -1,0 +1,24 @@
+=== FUNCTION GRAPH ===
+timerlat osnoise hwlat blk function_graph wakeup_dl wakeup_rt wakeup function nop
+observe_probe [observe_lab]
+GRAPH ready
+ 1)               |  observe_probe [observe_lab]() {
+ 1)               |    observe_wait_ready [observe_lab]() {
+ 1) ! 912.320 us  |    } /* observe_wait_ready [observe_lab] ret=0x0 */
+ 1)   3.536 us    |    observe_enable_queue [observe_lab](); /* ret=0x0 */
+ 1) # 2818.416 us |  } /* observe_probe [observe_lab] ret=0x0 */
+/sys/kernel/tracing/per_cpu/cpu0/stats:overrun: 0
+/sys/kernel/tracing/per_cpu/cpu0/stats:dropped events: 0
+/sys/kernel/tracing/per_cpu/cpu1/stats:overrun: 0
+/sys/kernel/tracing/per_cpu/cpu1/stats:dropped events: 0
+GRAPH timeout
+ 1)               |  observe_probe [observe_lab]() {
+ 1)               |    observe_wait_ready [observe_lab]() {
+ 1) # 6737.712 us |    } /* observe_wait_ready [observe_lab] ret=0xffffff92 */
+ 1)   6.304 us    |    observe_cleanup [observe_lab](); /* ret=0x0 */
+ 1) # 7168.384 us |  } /* observe_probe [observe_lab] ret=0xffffff92 */
+/sys/kernel/tracing/per_cpu/cpu0/stats:overrun: 0
+/sys/kernel/tracing/per_cpu/cpu0/stats:dropped events: 0
+/sys/kernel/tracing/per_cpu/cpu1/stats:overrun: 0
+/sys/kernel/tracing/per_cpu/cpu1/stats:dropped events: 0
+VERIFY FUNCTION GRAPH OK

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -u
+
+usage() {
+    cat <<'USAGE'
+Usage: wait-ready [--every SECONDS] [--timeout SECONDS] -- COMMAND [ARG...]
+The query returns 0 for ready, 1 for waiting, and any other status for an error.
+The tool returns 0 for READY, 124 for TIMEOUT, 2 for QUERY_ERROR, 64 for usage error.
+USAGE
+}
+
+fail() { printf 'wait-ready: %s\n' "$*" >&2; exit 64; }
+
+interval=1
+deadline=10
+while (($#)); do
+    case $1 in
+        --help|-h) usage; exit 0 ;;
+        --every|--timeout)
+            (($# >= 2)) && [[ $2 =~ ^[1-9][0-9]*$ ]] || fail "$1 needs positive whole seconds"
+            if [[ $1 == --every ]]; then interval=$2; else deadline=$2; fi
+            shift 2 ;;
+        --) shift; break ;;
+        *) fail "expected an option or -- before the query: $1" ;;
+    esac
+done
+(($#)) || fail 'provide a query after --'
+
+poll_ready() {
+    local interval=$1 status
+    shift
+    while true; do
+        if "$@" >/dev/null; then
+            printf 'READY\n'
+            return 0
+        else
+            status=$?
+        fi
+        if ((status != 1)); then
+            printf 'QUERY_ERROR (query exit=%s)\n' "$status" >&2
+            return 2
+        fi
+        printf 'WAITING\n'
+        sleep "$interval"
+    done
+}
+
+export -f poll_ready
+timeout --kill-after=1s "${deadline}s" bash -c 'poll_ready "$@"' wait-ready "$interval" "$@"
+status=$?
+case $status in
+    124|137) printf 'TIMEOUT\n' >&2; exit 124 ;;
+    *) exit "$status" ;;
+esac

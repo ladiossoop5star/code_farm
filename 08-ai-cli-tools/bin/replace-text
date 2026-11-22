@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""Replace literal text in a file and report the changed line numbers."""
+import argparse
+import os
+from pathlib import Path
+import stat
+from tempfile import NamedTemporaryFile
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('file', type=Path)
+parser.add_argument('old')
+parser.add_argument('new')
+args = parser.parse_args()
+if not args.old or any(c in args.old + args.new for c in '\r\n'):
+    parser.error('use nonempty search text and keep both values on one line')
+
+path = args.file.resolve()
+old, new = args.old.encode(), args.new.encode()
+try:
+    data = path.read_bytes()
+    changed = []
+    output = []
+    for number, line in enumerate(data.splitlines(keepends=True), 1):
+        revision = line.replace(old, new)
+        output.append(revision)
+        if revision != line:
+            changed.append((number, revision))
+    if changed:
+        mode = stat.S_IMODE(path.stat().st_mode)
+        with NamedTemporaryFile(dir=path.parent, delete=False) as scratch:
+            pending = Path(scratch.name)
+            try:
+                scratch.write(b''.join(output))
+                scratch.flush()
+                os.chmod(pending, mode)
+                os.replace(pending, path)
+            finally:
+                pending.unlink(missing_ok=True)
+except OSError as error:
+    parser.exit(1, f'replace-text: {error}\n')
+
+for number, line in changed:
+    text = line.rstrip(b'\r\n').decode(errors='replace')
+    print(f'{args.file}:{number}: {text}')
+print(f'{len(changed)} changed line(s)')

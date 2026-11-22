@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ ${1-} == --help || ${1-} == -h ]]; then
+    printf 'Usage: snap-log --out DIRECTORY INPUT.log\n'
+    exit 0
+fi
+if [[ $# != 3 || $1 != --out || ! -f $3 ]]; then
+    printf 'Usage: snap-log --out DIRECTORY INPUT.log\n' >&2
+    exit 64
+fi
+destination=$2
+input=$3
+mkdir -p -- "$destination"
+run=$(mktemp -d -- "$destination/run-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
+cp -- "$input" "$run/raw.log"
+awk '
+    BEGIN { print "line\tmessage" }
+    {
+        sub(/\r$/, "")
+        if ($0 ~ /^DUT SELFTEST FAIL:/) print NR "\t" $0
+    }
+' "$run/raw.log" > "$run/failures.tsv"
+printf '%s\n' "$run"
