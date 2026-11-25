@@ -1,0 +1,23 @@
+pass_criteria = '''
+看第 3 個 block 的接收端輸出，0–1、1–2、2–3 秒的 3 個完整區間都要有大於 0 的吞吐量。第 2 個 block 要看到傳輸後 DUT 回應 ping。兩項都有本輪證據才判 PASS。
+'''
+
+[[blocks]]
+machine = "receiver"
+commands = '''
+iperf -s -B 192.0.2.10 -i 1 -f m -t 8 > /tmp/iperf-server.log 2>&1 &
+sleep 2
+'''
+
+[[blocks]]
+machine = "sender"
+commands = '''
+iperf -c 192.0.2.10 -i 1 -b 12m -n 128K
+ping -c 1 -W 1 192.0.2.10
+'''
+
+[[blocks]]
+machine = "receiver"
+commands = '''
+cat /tmp/iperf-server.log && rm /tmp/iperf-server.log
+'''

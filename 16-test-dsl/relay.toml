@@ -1,0 +1,31 @@
+pass_criteria = '''
+本輪 iperf 接收端要連續測到 3 秒流量。查看 sink.log 的 0–1、1–2、2–3 秒，每個完整區間都要大於 0 Mbits/sec。
+同一個 DUT 在本輪傳輸中沒有 crash。dut.log 必須有完整的 session 結束訊息，health.log 在傳輸後必須確認 DUT PROBE OK。缺少任一項證據就判 FAIL。
+'''
+
+[[blocks]]
+machine = "receiver"
+commands = '''
+log="$TEST_ROUND/sink.log"
+: > "$log"
+python3 -u relay.py sink > "$log" 2>&1 &
+wait-ready --timeout 8 -- grep -Fx 'SINK READY' "$log"
+'''
+
+[[blocks]]
+machine = "dut"
+commands = '''
+log="$TEST_ROUND/dut.log"
+: > "$log"
+python3 -u relay.py dut > "$log" 2>&1 &
+wait-ready --timeout 8 -- grep -Fx 'DUT READY' "$log"
+'''
+
+[[blocks]]
+machine = "sender"
+commands = '''
+python3 -u relay.py client > "$TEST_ROUND/client.log" 2>&1
+printf '%s\n' "$?" > "$TEST_ROUND/client.status"
+python3 -u relay.py health > "$TEST_ROUND/health.log" 2>&1
+printf '%s\n' "$?" > "$TEST_ROUND/health.status"
+'''

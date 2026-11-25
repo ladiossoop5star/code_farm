@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+set -euo pipefail
+set +m
+umask 077
+
+if (( $# != 1 )); then
+    printf 'Usage: edward PLAN.toml\n' >&2
+    exit 2
+fi
+
+plan=$1
+tool_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+run_dir=$(mktemp -d "${TMPDIR:-/tmp}/edward.XXXXXXXX")
+run_dir=$(cd -- "$run_dir" && pwd)
+groups=()
+
+stop_jobs() {
+    local group
+    if (( ${#groups[@]} > 0 )); then
+        for group in "${groups[@]}"; do
+            kill -TERM -- "-$group" 2>/dev/null || true
+        done
+        sleep 0.15
+        for group in "${groups[@]}"; do
+            kill -KILL -- "-$group" 2>/dev/null || true
+            wait "$group" 2>/dev/null || true
+        done
+        groups=()
+    fi
+}
+
+trap stop_jobs EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+mkdir "$run_dir/plan"
+if ! python3 "$tool_dir/read-plan.py" "$plan" "$run_dir/plan"; then
+    exit 2
+fi
+export TEST_ROUND="$run_dir"
+export TEST_RUN_ID="${run_dir##*/}"
+cp -- "$run_dir/plan/pass-criteria.txt" "$run_dir/pass-criteria.txt"
+printf 'Round: %s\n' "$run_dir"
+
+record() {
+    printf '%s\n' "$1" | tee -a "$TEST_ROUND/execution.log"
+}
+
+record "Started: $(date -u +'%FT%TZ')"
+while IFS=$'\t' read -r block machine; do
+    script="$run_dir/plan/$block.sh"
+    log="$run_dir/$block-$machine.log"
+    record "Block $block  $machine"
+    if [[ $machine == local ]]; then
+        # Keep ordinary local background jobs together for round cleanup.
+        setsid bash -o pipefail "$script" </dev/null > "$log" 2>&1 &
+    else
+        # Buffer the full script so its commands cannot consume later lines from SSH stdin.
+        setsid env -u TEST_ROUND ssh -T -o BatchMode=yes -o ConnectTimeout=5 -- "$machine" \
+            "TEST_RUN_ID=$TEST_RUN_ID bash -o pipefail -c \"\$(cat)\"" < "$script" > "$log" 2>&1 &
+    fi
+    job=$!
+    groups+=("$job")
+    status=0
+    wait "$job" || status=$?
+    if ! kill -0 -- "-$job" 2>/dev/null; then
+        unset 'groups[-1]'
+    fi
+    record "  exit $status  ${log##*/}"
+    if (( status != 0 )); then
+        record "Execution: stopped at block $block"
+        exit 1
+    fi
+done < "$run_dir/plan/blocks.tsv"
+record 'Execution: completed'

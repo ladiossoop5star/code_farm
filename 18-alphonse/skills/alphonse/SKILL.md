@@ -1,0 +1,21 @@
+---
+name: alphonse
+description: Run one approved Test DSL TOML plan from a Herdr pane, preserve foreground fixtures while other panes work, and judge PASS or FAIL from the current output.
+---
+
+# Alphonse
+
+1. **Check Herdr first.** Run `test "${HERDR_ENV:-}" = 1 && test -n "${HERDR_PANE_ID:-}" && herdr pane current --current`. If any check fails, tell the user Alphonse must start inside a Herdr pane and stop before reading the plan, opening panes, or connecting to any device.
+2. Read the whole plan before executing it. It contains `pass_criteria` and ordered `[[blocks]]` with `machine` and multiline `commands`. A block with `ready` has one foreground fixture command and a literal readiness string. Use only the supplied plan. Stop before executing anything if a command, target, or required cleanup is unclear. A machine is `local` or a configured SSH alias. An alias may name a second login to the same host.
+3. From the caller's Herdr pane, run `python3 <skill-dir>/scripts/open-panes.py <plan.toml>` once. Use its returned machine-to-pane mapping for every command, including in other tabs. Run `ssh <alias>` on the mapped pane, leaving `local` at the local shell. Verify each expected login prompt before testing. Stop the round if login fails or needs interaction.
+4. Execute the blocks in order. Use `herdr pane run <id> <command>` to submit the approved command text to the correct pane. For ordinary Bash command lines, wait for the command to finish before the next line. For this example, the sender's two ordinary lines can also be joined with `; ` to execute in order even if iperf errors. Append a unique, single-line completion marker with `printf '\n__ALPHONSE_BLOCK_02_DONE__\n'` for the sender and a different marker for the console. Wait for the exact line with `herdr pane wait-output <id> --regex '^__ALPHONSE_BLOCK_02_DONE__$' --source visible --timeout 15000`. This marker confirms the shell got past the command. Preserve the original output and any errors. Use an existing shell script as a command if a block needs complex control flow.
+5. For a block with `ready`, send its single fixture command in the foreground. Wait using `herdr pane wait-output <id> --match 'Server listening' --source visible --timeout 10000` for this example. After readiness, leave the fixture running and continue in other panes. Never type a shell command into a pane whose fixture is still in the foreground. A missed readiness check or missing completion marker means the round cannot safely proceed. Read that pane, report the blocker, and clean up. A completed command with an error can still be followed by the scheduled observations.
+6. Read each relevant pane with `herdr pane read <id> --source visible`. If the pane is short or evidence has scrolled away, also read `--source recent-unwrapped --lines 60`. Keep only the evidence needed for this round. Stop the exact foreground fixture you started using `herdr pane send-keys <id> ctrl+c` and confirm the login shell returned. Close only the pane IDs from the helper's mapping, unless the caller asks to keep them open. Close idle panes directly. Clean up on interrupted rounds too.
+7. Give PASS only when this round's outputs establish every written criterion. Give FAIL with the missing or failed observation otherwise. Never add steps, change the plan, or substitute client numbers for receiver numbers.
+
+## Fixed pane layout
+
+- Order distinct `machine` values by first appearance in the TOML. All blocks for a machine reuse its pane.
+- With exactly one pane in the caller's tab, split it 50/50. Keep the caller on the left and stack the first 1–3 test panes on the right. With two or more existing panes, start all tests in a new tab.
+- Each new tab holds up to 6 test panes. A single pane uses the full tab. Otherwise split the tab 50/50 first, giving the left column the extra pane if the count is odd. Assign machine names top to bottom in the left column, then top to bottom in the right column. Split each column into equal-height panes. For 3 panes, split off the top third, then halve the remaining two thirds.
+- Continue in a fresh tab for each group of up to 6. The helper uses the caller's workspace, keeps focus in place, and returns the IDs of the panes it opened.

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+if (( $# != 1 )); then
+    printf 'Usage: edward PLAN.toml\n' >&2
+    exit 2
+fi
+
+tool_dir=$(cd -- "$(dirname -- "$0")" && pwd)
+work=$(mktemp -d -t edward-plan.XXXXXXXX)
+
+cleanup() {
+    local file
+    shopt -s nullglob
+    for file in "$work"/*; do
+        rm -- "$file"
+    done
+    rmdir -- "$work"
+}
+trap cleanup EXIT
+
+if ! python3 "$tool_dir/read-plan.py" "$1" "$work"; then
+    exit 2
+fi
+
+report=$(mktemp -t edward.XXXXXXXX.log)
+
+run_plan() {
+    printf 'Pass criteria\n'
+    cat "$work/pass-criteria.txt"
+    while IFS=$'\t' read -r block machine; do
+        printf '\nBlock %s  %s\n' "$block" "$machine"
+        script="$work/$block.sh"
+        if [[ $machine == local ]]; then
+            bash "$script" </dev/null || :
+        else
+            # Read the complete script before its commands can consume stdin.
+            ssh -T -o BatchMode=yes -o ConnectTimeout=5 -- "$machine" \
+                'bash -c "$(cat)"' < "$script" || :
+        fi
+    done < "$work/blocks.tsv"
+}
+
+run_plan 2>&1 | tee "$report"
+printf '\nReport: %s\n' "$report"

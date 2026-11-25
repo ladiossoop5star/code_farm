@@ -1,0 +1,16 @@
+diff --git a/sensor-power.c b/sensor-power.c
+--- a/sensor-power.c
++++ b/sensor-power.c
+@@ -10,11 +10,8 @@
+     if (ret)
+         goto disable_supply;
+ 
+-    ret = restore_config(sensor);
+-    if (!ret)
+-        return 0;
++    return restore_config(sensor);
+ 
+-    clock_disable(sensor);
+ disable_supply:
+     supply_disable(sensor);
+     return ret;

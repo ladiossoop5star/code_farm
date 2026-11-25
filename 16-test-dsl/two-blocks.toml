@@ -1,0 +1,20 @@
+pass_criteria = '''
+接收端的 receiver.log 在 0–1、1–2、2–3 秒的完整區間各有大於 0 的吞吐量。
+'''
+
+[[blocks]]
+machine = "receiver"
+commands = '''
+log="$TEST_ROUND/receiver.log"
+port=${IPERF_PORT:-55106}
+: > "$log"
+LC_ALL=C stdbuf -oL iperf -s -i 1 -w8M -B 127.0.0.1 -p "$port" -f m > "$log" 2>&1 &
+wait-ready --timeout 8 -- grep -Fx "Server listening on TCP port $port" "$log"
+'''
+
+[[blocks]]
+machine = "sender"
+commands = '''
+port=${IPERF_PORT:-55106}
+iperf -c 127.0.0.1 -p "$port" -t 3 -i 1 -b 12m -f m > "$TEST_ROUND/sender.log" 2>&1
+'''

@@ -1,0 +1,25 @@
+pass_criteria = '''
+接收端本輪的 iperf 輸出，在 0–1、1–2、2–3 秒的 3 個完整區間都要有大於 0 的吞吐量。
+傳輸後，發送端的 ping 要收到 DUT 回覆，DUT 的獨立 console 也要印出核心版本。
+3 項都要有本輪證據才判 PASS。
+'''
+
+[[blocks]]
+machine = "receiver"
+ready = "Server listening"
+commands = '''
+iperf -s -B 192.0.2.10 -i 1 -f m
+'''
+
+[[blocks]]
+machine = "sender"
+commands = '''
+iperf -c 192.0.2.10 -i 1 -b 12m -n 128K
+ping -c 1 -W 1 192.0.2.10
+'''
+
+[[blocks]]
+machine = "dut-console"
+commands = '''
+uname -r
+'''

@@ -1,0 +1,46 @@
+pass_criteria = '''
+查閱本輪 03-receiver.log。接收端在 0–1、1–2、2–3 秒的 3 個完整區間都必須有大於 0 Mbits/sec 的吞吐量，且 receiver exit 為 0。缺少任何一項就判 FAIL。
+'''
+
+[[blocks]]
+machine = "receiver"
+commands = '''
+umask 077
+mkdir -p "$HOME/.cache/edward" || exit
+log="$HOME/.cache/edward/$TEST_RUN_ID.log"
+(
+    trap '' HUP
+    LC_ALL=C timeout --kill-after=1s 12s stdbuf -oL -eL iperf -s -B 192.0.2.10 -p 55106 -i 1 -f m -t 8
+    printf '\nreceiver exit: %s\n' "$?"
+) </dev/null > "$log" 2>&1 &
+for attempt in {1..40}; do
+    if grep -q '^Server listening on TCP port 55106' "$log"; then
+        printf 'Receiver ready\n'
+        exit 0
+    fi
+    sleep 0.1
+done
+cat "$log" >&2
+exit 1
+'''
+
+[[blocks]]
+machine = "sender"
+commands = '''
+LC_ALL=C timeout 12s iperf -c 192.0.2.10 -p 55106 -i 1 -f m -b 12m -n 128K
+'''
+
+[[blocks]]
+machine = "receiver"
+commands = '''
+log="$HOME/.cache/edward/$TEST_RUN_ID.log"
+for attempt in {1..120}; do
+    if grep -q '^receiver exit:' "$log"; then
+        cat "$log" && rm -- "$log"
+        exit
+    fi
+    sleep 0.1
+done
+cat "$log" >&2
+exit 1
+'''

@@ -1,0 +1,7 @@
+Host receiver
+    HostName 192.0.2.10
+    User tester
+
+Host sender
+    HostName 192.0.2.20
+    User tester
